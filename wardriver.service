@@ -1,0 +1,21 @@
+[Unit]
+Description=WardriverPy Wardriving Tool
+After=network-online.target bluetooth.target
+Wants=network-online.target bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+Group=bluetooth
+WorkingDirectory=/home/pi/wardriver
+ExecStartPre=/bin/bash -c 'rfkill unblock all; hciconfig hci0 up; iw dev wlan0 set power_save off 2>/dev/null || true'
+ExecStart=/usr/bin/python3 app.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wardriver
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

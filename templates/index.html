@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WardriverPy — WiGLE Wardriving</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --bg: #0a0e1a; --bg2: #111827; --bg3: #1c2333;
+      --accent: #00d4ff; --green: #00ff88; --red: #ff4455;
+      --yellow: #ffd700; --orange: #ff8c00; --purple: #9b59ff;
+      --text: #e0e8f0; --muted: #6b7a99; --border: #1e2d4a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; font-size: 13px; }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(90deg, #0a0e1a, #0d1f3c);
+      border-bottom: 1px solid var(--accent);
+      padding: 10px 20px;
+      display: flex; align-items: center; gap: 20px;
+    }
+    .logo { font-size: 20px; font-weight: bold; color: var(--accent); letter-spacing: 2px; }
+    .logo span { color: var(--green); }
+    .status-bar { display: flex; gap: 15px; margin-left: auto; flex-wrap: wrap; }
+    .badge {
+      padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;
+      border: 1px solid; display: flex; align-items: center; gap: 5px;
+    }
+    .badge.green  { color: var(--green);  border-color: var(--green);  background: rgba(0,255,136,.08); }
+    .badge.red    { color: var(--red);    border-color: var(--red);    background: rgba(255,68,85,.08); }
+    .badge.blue   { color: var(--accent); border-color: var(--accent); background: rgba(0,212,255,.08); }
+    .badge.yellow { color: var(--yellow); border-color: var(--yellow); background: rgba(255,215,0,.08); }
+    .dot { width:8px; height:8px; border-radius:50%; display:inline-block; animation: pulse 1.5s infinite; }
+    .dot.green  { background: var(--green); }
+    .dot.red    { background: var(--red); animation: none; }
+    .dot.yellow { background: var(--yellow); }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+
+    /* ── Layout ── */
+    .main { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 50px); }
+    .sidebar { background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; }
+    .content { display: flex; flex-direction: column; }
+
+    /* ── Panels ── */
+    .panel { border-bottom: 1px solid var(--border); }
+    .panel-header {
+      padding: 10px 15px; background: var(--bg3); cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; font-weight: bold; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--accent);
+      user-select: none;
+    }
+    .panel-header:hover { background: #1e2d4a; }
+    .panel-body { padding: 12px 15px; }
+    .panel-body.collapsed { display: none; }
+
+    /* ── Form Controls ── */
+    .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .form-row label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    select, input[type=text], input[type=number], input[type=password] {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 8px; border-radius: 4px; font-family: inherit; font-size: 12px; width: 100%;
+    }
+    select:focus, input:focus { border-color: var(--accent); outline: none; }
+    .btn {
+      padding: 7px 14px; border-radius: 4px; border: none; cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: bold; text-transform: uppercase;
+      letter-spacing: 1px; transition: all .2s;
+    }
+    .btn-primary  { background: var(--accent); color: #000; }
+    .btn-danger   { background: var(--red); color: #fff; }
+    .btn-success  { background: var(--green); color: #000; }
+    .btn-warning  { background: var(--yellow); color: #000; }
+    .btn-purple   { background: var(--purple); color: #fff; }
+    .btn-dark     { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+    .btn:hover    { filter: brightness(1.15); transform: translateY(-1px); }
+    .btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+    .btn-group    { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* ── Stats Grid ── */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-box {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; text-align: center;
+    }
+    .stat-box .val { font-size: 22px; font-weight: bold; color: var(--accent); }
+    .stat-box .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+    .stat-box.green .val { color: var(--green); }
+    .stat-box.red   .val { color: var(--red); }
+    .stat-box.yellow .val { color: var(--yellow); }
+    .stat-box.purple .val { color: var(--purple); }
+    .stat-box.orange .val { color: var(--orange); }
+
+    /* ── Map ── */
+    #map { flex: 1; min-height: 350px; }
+
+    /* ── Table ── */
+    .table-wrap { height: 300px; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { background: var(--bg3); color: var(--muted); padding: 6px 8px; text-align: left;
+         text-transform: uppercase; position: sticky; top: 0; z-index: 1; border-bottom: 1px solid var(--border); }
+    td { padding: 5px 8px; border-bottom: 1px solid #0d1525; white-space: nowrap; }
+    tr:hover td { background: rgba(0,212,255,.04); }
+    tr.new-net td { animation: flash 1s ease; }
+    @keyframes flash { 0% { background: rgba(0,255,136,.2); } 100% { background: transparent; } }
+    .ssid { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+    .sec { padding: 2px 5px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+    .sec.open { background:rgba(255,68,85,.2);  color:var(--red);    }
+    .sec.wep  { background:rgba(255,140,0,.2);  color:var(--orange); }
+    .sec.wpa  { background:rgba(0,212,255,.2);  color:var(--accent); }
+    .sec.wpa2 { background:rgba(0,255,136,.2);  color:var(--green);  }
+    .sec.wpa3 { background:rgba(155,89,255,.2); color:var(--purple); }
+    .rssi-bar { display:inline-block; height:8px; border-radius:2px; vertical-align:middle; margin-left:4px; }
+    .src-badge { font-size:9px; padding:1px 4px; border-radius:3px; }
+    .src-linux  { background:rgba(0,212,255,.15); color:var(--accent); }
+    .src-tpager { background:rgba(155,89,255,.15); color:var(--purple); }
+
+    /* ── GPS Box ── */
+    .gps-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+    .gps-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+    .gps-row .key { color: var(--muted); }
+    .gps-row .val { color: var(--text); font-weight: bold; }
+    .gps-row .val.fix  { color: var(--green); }
+    .gps-row .val.nofix { color: var(--red); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--bg3); border: 1px solid var(--border);
+      padding: 10px 18px; border-radius: 6px; z-index: 9999;
+      display: none; font-size: 13px; max-width: 350px;
+    }
+    #toast.ok  { border-color: var(--green); }
+    #toast.err { border-color: var(--red); }
+    #toast.info { border-color: var(--accent); }
+
+    /* ── Tab System ── */
+    .tab-bar { display:flex; background:var(--bg3); border-bottom:1px solid var(--border); }
+    .tab-btn {
+      padding:8px 16px; cursor:pointer; font-size:11px; font-weight:bold;
+      text-transform:uppercase; color:var(--muted); border-bottom:2px solid transparent;
+      transition:all .2s;
+    }
+    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-btn:hover  { color:var(--text); }
+    .tab-content    { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+    .tab-pane       { display:none; flex:1; flex-direction:column; overflow:hidden; }
+    .tab-pane.active { display:flex; }
+
+    /* ── WiGLE results ── */
+    .wigle-result { background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:8px 12px; margin-top:6px; font-size:12px; }
+    .wigle-ok  { border-color:var(--green); }
+    .wigle-err { border-color:var(--red); }
+
+    /* ── Spinner ── */
+    .spinner { border:2px solid var(--border); border-top:2px solid var(--accent);
+               border-radius:50%; width:14px; height:14px; animation: spin .7s linear infinite; display:inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ─── -->
+<div class="header">
+  <div class="logo">WARD<span>RIVER</span>PY</div>
+  <div class="status-bar">
+    <div class="badge" id="badge-scan" class="red">
+      <span class="dot red" id="dot-scan"></span>
+      <span id="lbl-scan">IDLE</span>
+    </div>
+    <div class="badge blue" id="badge-gps">
+      <span class="dot yellow" id="dot-gps"></span>
+      <span id="lbl-gps">GPS: NONE</span>
+    </div>
+    <div class="badge" id="badge-tpager" style="color:var(--purple);border-color:var(--purple);background:rgba(155,89,255,.08)">
+      <span class="dot red" id="dot-tpager"></span>
+      <span id="lbl-tpager">T-PAGER: OFF</span>
+    </div>
+    <div class="badge green">
+      TOTAL: <span id="hdr-total">0</span>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Main Layout ─── -->
+<div class="main">
+
+  <!-- ─── Sidebar ─── -->
+  <div class="sidebar">
+
+    <!-- Scanner Control -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">
+        ▶ Scanner Control <span id="scan-status-txt" style="color:var(--red)">IDLE</span>
+      </div>
+      <div class="panel-body">
+        <div class="form-row">
+          <label>WiFi Interface</label>
+          <select id="iface-select">
+            <option value="">Auto-detect</option>
+            {% for iface in interfaces %}
+            <option value="{{ iface }}">{{ iface }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Scan Interval (seconds)</label>
+          <input type="number" id="scan-interval" value="5" min="2" max="60"/>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" id="btn-start" onclick="startScan()">START</button>
+          <button class="btn btn-danger" id="btn-stop" onclick="stopScan()" disabled>STOP</button>
+          <button class="btn btn-dark" onclick="clearNets()">CLEAR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- T-Pager -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">▶ T-Pager (ESP32)</div>
+      <div class="panel-body">
+        <div class="form-row">
+          <label>Serial Port</label>
+          <select id="tpager-port">
+            <option value="">Auto-detect{% if auto_port %} ({{ auto_port }}){% endif %}</option>
+            {% for p in serial_ports %}
+            <option value="{{ p.device }}">{{ p.device }} - {{ p.description[:30] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Baud Rate</label>
+          <select id="tpager-baud">
+            <option value="115200" selected>115200</option>
+            <option value="9600">9600</option>
+            <option value="57600">57600</option>
+          </select>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-purple" id="btn-tpager-connect" onclick="tpagerConnect()">CONNECT</button>
+          <button class="btn btn-danger" id="btn-tpager-disconnect" onclick="tpagerDisconnect()" disabled>DISCONNECT</button>
+        </div>
+        <div style="margin-top:8px;" id="tpager-status-box" class="gps-box" style="display:none">
+          <div class="gps-row"><span class="key">Status</span><span class="val" id="tp-status">-</span></div>
+          <div class="gps-row"><span class="key">Port</span><span class="val" id="tp-port">-</span></div>
+          <div class="gps-row"><span class="key">Version</span><span class="val" id="tp-version">-</span></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div class="btn-group">
+            <button class="btn btn-dark btn-sm" onclick="tpagerCmd('scan_start')" title="Start scan on device">▶ Scan</button>
+            <button class="btn btn-dark btn-sm" onclick="tpagerCmd('scan_stop')" title="Stop scan on device">■ Stop</button>
+            <button class="btn btn-dark btn-sm" onclick="tpagerCmd('ping')" title="Ping device">PING</button>
+            <button class="btn btn-dark btn-sm" onclick="tpagerCmd('stats')" title="Get device stats">STATS</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GPS -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">▶ GPS</div>
+      <div class="panel-body">
+        <div class="form-row">
+          <label>GPS Mode</label>
+          <select id="gps-mode" onchange="toggleGPSFields()">
+            <option value="auto">Auto (gpsd → serial)</option>
+            <option value="gpsd">gpsd daemon</option>
+            <option value="serial">Serial / USB GPS</option>
+            <option value="manual">Manual Coordinates</option>
+          </select>
+        </div>
+        <div id="serial-fields">
+          <div class="form-row">
+            <label>Serial Port</label>
+            <select id="gps-port">
+              {% for p in serial_ports %}
+              <option value="{{ p.device }}">{{ p.device }}</option>
+              {% endfor %}
+              <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+              <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+            </select>
+          </div>
+        </div>
+        <div id="manual-fields" style="display:none">
+          <div class="form-row">
+            <label>Latitude</label>
+            <input type="text" id="man-lat" placeholder="e.g. 51.5074"/>
+          </div>
+          <div class="form-row">
+            <label>Longitude</label>
+            <input type="text" id="man-lon" placeholder="e.g. -0.1278"/>
+          </div>
+          <button class="btn btn-dark" onclick="setManualGPS()" style="width:100%;margin-bottom:8px">SET COORDS</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btn-gps-start" onclick="startGPS()">START GPS</button>
+          <button class="btn btn-danger" id="btn-gps-stop" onclick="stopGPS()" disabled>STOP</button>
+        </div>
+        <div style="margin-top:10px" class="gps-box" id="gps-box">
+          <div class="gps-row"><span class="key">Fix</span><span class="val nofix" id="gps-fix">NO FIX</span></div>
+          <div class="gps-row"><span class="key">Source</span><span class="val" id="gps-src">-</span></div>
+          <div class="gps-row"><span class="key">Lat</span><span class="val" id="gps-lat">-</span></div>
+          <div class="gps-row"><span class="key">Lon</span><span class="val" id="gps-lon">-</span></div>
+          <div class="gps-row"><span class="key">Alt</span><span class="val" id="gps-alt">-</span></div>
+          <div class="gps-row"><span class="key">Speed</span><span class="val" id="gps-speed">-</span></div>
+          <div class="gps-row"><span class="key">Sats</span><span class="val" id="gps-sats">-</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone GPS -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">▶ Phone GPS</div>
+      <div class="panel-body">
+        <div style="margin-bottom:10px">
+          <p style="font-size:11px;color:var(--muted);margin-bottom:8px">
+            Open the link below on your phone. Your phone's GPS will stream to this tool over WiFi.
+          </p>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center" id="phone-url-box">
+            <span style="color:var(--muted);font-size:11px">Loading...</span>
+          </div>
+          <div style="text-align:center;margin-top:8px" id="qr-box"></div>
+        </div>
+        <div class="badge" id="phone-gps-badge" style="width:100%;justify-content:center;margin-bottom:10px">
+          <span class="dot red" id="dot-phone"></span>
+          <span id="lbl-phone">PHONE GPS: OFF</span>
+        </div>
+        <hr style="border-color:var(--border);margin:10px 0"/>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:8px">
+          Or use a GPS app (Share GPS / GPS2IP) over TCP NMEA:
+        </p>
+        <div class="form-row">
+          <label>TCP Port</label>
+          <input type="number" id="tcp-port" value="10110"/>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="tcp-addr-hint">
+          Set app target to <b id="tcp-host-hint">your-ip</b>:<b id="tcp-port-hint">10110</b>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" id="btn-tcp-start" onclick="startTCPNMEA()">START</button>
+          <button class="btn btn-danger"  id="btn-tcp-stop"  onclick="stopTCPNMEA()" disabled>STOP</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px" id="tcp-status-txt"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">▶ Statistics</div>
+      <div class="panel-body">
+        <div class="stats-grid">
+          <div class="stat-box"><div class="val" id="stat-total">0</div><div class="lbl">Total</div></div>
+          <div class="stat-box red"><div class="val" id="stat-open">0</div><div class="lbl">Open</div></div>
+          <div class="stat-box green"><div class="val" id="stat-wpa2">0</div><div class="lbl">WPA2</div></div>
+          <div class="stat-box purple"><div class="val" id="stat-wpa3">0</div><div class="lbl">WPA3</div></div>
+          <div class="stat-box yellow"><div class="val" id="stat-wpa">0</div><div class="lbl">WPA</div></div>
+          <div class="stat-box orange"><div class="val" id="stat-wep">0</div><div class="lbl">WEP</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WiGLE -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">▶ WiGLE Upload</div>
+      <div class="panel-body">
+        <!-- Logged-in state -->
+        <div id="wigle-logged-in" style="display:none;margin-bottom:10px">
+          <div class="wigle-result wigle-ok" style="display:flex;align-items:center;gap:8px">
+            <span class="dot green"></span>
+            Logged in as <b id="wigle-user-display"></b>
+            &nbsp;<a href="#" onclick="wigleLogout();return false" style="color:var(--red);font-size:10px;margin-left:auto">sign out</a>
+          </div>
+        </div>
+        <!-- Login form -->
+        <div id="wigle-login-form">
+          <div class="form-row">
+            <label>WiGLE Username</label>
+            <input type="text" id="wigle-username" autocomplete="username" placeholder="your wigle username"/>
+          </div>
+          <div class="form-row">
+            <label>WiGLE Password</label>
+            <input type="password" id="wigle-password" autocomplete="current-password" placeholder="your wigle password"/>
+          </div>
+          <div class="btn-group" style="margin-bottom:8px">
+            <button class="btn btn-dark" onclick="wigleLogin()">LOGIN</button>
+          </div>
+          <div id="wigle-auth-result"></div>
+        </div>
+        <div style="margin-top:10px">
+          <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="wigle-donate"/> <span style="font-size:11px">Donate to WiGLE</span>
+          </label>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="wigleUpload()">UPLOAD TO WIGLE</button>
+          </div>
+          <div id="wigle-upload-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel(this)">▶ Export</div>
+      <div class="panel-body">
+        <div class="btn-group">
+          <button class="btn btn-dark" onclick="exportFile('csv')">CSV (WiGLE)</button>
+          <button class="btn btn-dark" onclick="exportFile('kml')">KML</button>
+          <button class="btn btn-dark" onclick="exportFile('json')">JSON</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ─── Content Area ─── -->
+  <div class="content">
+    <div class="tab-bar">
+      <div class="tab-btn active" onclick="switchTab('map')">MAP</div>
+      <div class="tab-btn" onclick="switchTab('networks')">NETWORKS</div>
+      <div class="tab-btn" onclick="switchTab('wigle-search')">WIGLE SEARCH</div>
+    </div>
+
+    <!-- Map Tab -->
+    <div class="tab-pane active" id="tab-map">
+      <div id="map"></div>
+    </div>
+
+    <!-- Networks Tab -->
+    <div class="tab-pane" id="tab-networks">
+      <div style="padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <input type="text" id="net-filter" placeholder="Filter SSID / BSSID..." style="width:220px" oninput="filterNetworks()"/>
+        <select id="net-sort" onchange="renderTable()" style="width:140px">
+          <option value="rssi">Sort: Signal</option>
+          <option value="ssid">Sort: SSID</option>
+          <option value="channel">Sort: Channel</option>
+          <option value="first_seen">Sort: First Seen</option>
+        </select>
+        <span style="color:var(--muted);font-size:11px">Showing <span id="net-count">0</span> networks</span>
+        <button class="btn btn-dark" style="margin-left:auto;padding:4px 10px" onclick="exportFile('csv')">Export CSV</button>
+      </div>
+      <div class="table-wrap" id="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>SSID</th>
+              <th>BSSID</th>
+              <th>Security</th>
+              <th>Ch</th>
+              <th>RSSI</th>
+              <th>Lat</th>
+              <th>Lon</th>
+              <th>Src</th>
+              <th>First Seen</th>
+            </tr>
+          </thead>
+          <tbody id="net-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- WiGLE Search Tab -->
+    <div class="tab-pane" id="tab-wigle-search">
+      <div style="padding:15px;background:var(--bg3);border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-row" style="flex:1;min-width:120px">
+            <label>Latitude</label>
+            <input type="text" id="search-lat" placeholder="Use GPS fix"/>
+          </div>
+          <div class="form-row" style="flex:1;min-width:120px">
+            <label>Longitude</label>
+            <input type="text" id="search-lon" placeholder="Use GPS fix"/>
+          </div>
+          <div class="form-row" style="width:100px">
+            <label>Radius (km)</label>
+            <input type="number" id="search-radius" value="0.5" min="0.1" max="10" step="0.1"/>
+          </div>
+          <button class="btn btn-primary" onclick="wigleSearch()">SEARCH WIGLE</button>
+          <button class="btn btn-dark" onclick="useGPSForSearch()">USE GPS</button>
+        </div>
+      </div>
+      <div id="wigle-search-results" style="flex:1;overflow-y:auto;padding:15px">
+        <div style="color:var(--muted);text-align:center;margin-top:40px">Enter coordinates or use GPS fix, then search WiGLE for nearby networks.</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div>
+
+<!-- ─── Toast ─── -->
+<div id="toast"></div>
+
+<!-- ─── Scripts ─── -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let networks = {};      // bssid → net object
+let gpsPos   = null;
+let scanning = false;
+let tpagerOk = false;
+
+// ── Map Setup ─────────────────────────────────────────────────────────────
+const map = L.map('map').setView([20, 0], 3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap',
+  className: 'map-tiles'
+}).addTo(map);
+
+// Dark map tiles via CSS
+const style = document.createElement('style');
+style.innerHTML = `.map-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85); }`;
+document.head.appendChild(style);
+
+const markers = {};
+let gpsMarker = null;
+let centerLocked = false;
+
+function secColor(auth) {
+  if (!auth || auth === '[ESS]') return '#ff4455';
+  if (auth.includes('WPA3'))    return '#9b59ff';
+  if (auth.includes('WPA2'))    return '#00ff88';
+  if (auth.includes('WPA'))     return '#00d4ff';
+  if (auth.includes('WEP'))     return '#ff8c00';
+  return '#ff4455';
+}
+
+function makeIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:10px;height:10px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,.4);box-shadow:0 0 6px ${color}"></div>`,
+    iconSize: [10, 10], iconAnchor: [5, 5]
+  });
+}
+
+function addMapMarker(net) {
+  if (!net.lat || !net.lon || (net.lat === 0 && net.lon === 0)) return;
+  const color = secColor(net.auth_mode);
+  const icon  = makeIcon(color);
+  if (markers[net.bssid]) {
+    markers[net.bssid].setLatLng([net.lat, net.lon]);
+  } else {
+    const m = L.marker([net.lat, net.lon], {icon})
+      .bindPopup(`<b>${escHtml(net.ssid)}</b><br>${net.bssid}<br>${net.auth_mode}<br>Ch ${net.channel} | ${net.rssi} dBm`)
+      .addTo(map);
+    markers[net.bssid] = m;
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+const socket = io();
+
+socket.on('connect', () => { /* init from server */ });
+
+socket.on('init', (data) => {
+  data.networks.forEach(n => { networks[n.bssid] = n; addMapMarker(n); });
+  updateStats(data.stats);
+  if (data.gps) updateGPSDisplay(data.gps);
+  renderTable();
+  setScanning(data.scanning, data.scan_source);
+});
+
+socket.on('networks_update', (data) => {
+  let changed = false;
+  data.networks.forEach(n => {
+    networks[n.bssid] = n;
+    addMapMarker(n);
+    changed = true;
+  });
+  if (data.new_bssids && data.new_bssids.length) {
+    data.new_bssids.forEach(b => flashRow(b));
+  }
+  updateStats(data.stats);
+  if (data.gps) updateGPSDisplay(data.gps);
+  if (changed) renderTable();
+});
+
+socket.on('gps_update', (fix) => {
+  updateGPSDisplay(fix);
+});
+
+socket.on('tpager_status', (data) => {
+  tpagerOk = data.status === 'connected';
+  document.getElementById('dot-tpager').className  = `dot ${tpagerOk ? 'green' : 'red'}`;
+  document.getElementById('lbl-tpager').textContent = `T-PAGER: ${tpagerOk ? 'ON' : 'OFF'}`;
+  document.getElementById('tp-status').textContent  = data.status.toUpperCase();
+  document.getElementById('tp-port').textContent    = data.port || '-';
+  document.getElementById('btn-tpager-disconnect').disabled = !tpagerOk;
+  document.getElementById('btn-tpager-connect').disabled    = tpagerOk;
+  if (data.status === 'connected') toast('T-Pager connected: ' + data.message, 'ok');
+  else toast('T-Pager disconnected', 'err');
+});
+
+socket.on('tpager_stat', (data) => {
+  document.getElementById('tp-version').textContent = data.version || '-';
+});
+
+// ── UI Updates ─────────────────────────────────────────────────────────────
+function updateStats(s) {
+  if (!s) return;
+  const t = s.total || 0;
+  document.getElementById('stat-total').textContent = t;
+  document.getElementById('stat-open').textContent  = s.open  || 0;
+  document.getElementById('stat-wpa2').textContent  = s.wpa2  || 0;
+  document.getElementById('stat-wpa3').textContent  = s.wpa3  || 0;
+  document.getElementById('stat-wpa').textContent   = s.wpa   || 0;
+  document.getElementById('stat-wep').textContent   = s.wep   || 0;
+  document.getElementById('hdr-total').textContent  = t;
+}
+
+function updateGPSDisplay(fix) {
+  gpsPos = fix;
+  const hasFix = fix.fix_type && fix.fix_type !== 'none' && (fix.lat || fix.lon);
+  const fixEl  = document.getElementById('gps-fix');
+  fixEl.textContent = hasFix ? fix.fix_type.toUpperCase() + ' FIX' : 'NO FIX';
+  fixEl.className   = 'val ' + (hasFix ? 'fix' : 'nofix');
+  document.getElementById('gps-src').textContent   = fix.source || '-';
+  document.getElementById('gps-lat').textContent   = fix.lat ? fix.lat.toFixed(6) : '-';
+  document.getElementById('gps-lon').textContent   = fix.lon ? fix.lon.toFixed(6) : '-';
+  document.getElementById('gps-alt').textContent   = fix.alt ? fix.alt.toFixed(1) + ' m' : '-';
+  document.getElementById('gps-speed').textContent = fix.speed ? (fix.speed * 3.6).toFixed(1) + ' km/h' : '-';
+  document.getElementById('gps-sats').textContent  = fix.satellites || '-';
+  document.getElementById('dot-gps').className  = `dot ${hasFix ? 'green' : 'yellow'}`;
+  document.getElementById('lbl-gps').textContent = `GPS: ${hasFix ? fix.fix_type.toUpperCase() : 'NO FIX'}`;
+
+  if (hasFix) {
+    if (!gpsMarker) {
+      gpsMarker = L.marker([fix.lat, fix.lon], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:14px;height:14px;background:#fff;border-radius:50%;border:3px solid #00d4ff;box-shadow:0 0 10px #00d4ff"></div>',
+          iconSize: [14,14], iconAnchor: [7,7]
+        })
+      }).addTo(map).bindPopup('Your Position');
+    } else {
+      gpsMarker.setLatLng([fix.lat, fix.lon]);
+    }
+    if (centerLocked) map.setView([fix.lat, fix.lon]);
+  }
+}
+
+function setScanning(active, source) {
+  scanning = active;
+  document.getElementById('btn-start').disabled = active && source === 'linux';
+  document.getElementById('btn-stop').disabled  = !(active && source === 'linux');
+  const dot = document.getElementById('dot-scan');
+  const lbl = document.getElementById('lbl-scan');
+  const txt = document.getElementById('scan-status-txt');
+  if (active) {
+    dot.className = 'dot green';
+    lbl.textContent = `SCANNING (${source})`;
+    txt.style.color = 'var(--green)';
+    txt.textContent = 'ACTIVE';
+  } else {
+    dot.className = 'dot red';
+    lbl.textContent = 'IDLE';
+    txt.style.color = 'var(--red)';
+    txt.textContent = 'IDLE';
+  }
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────
+let filterText = '';
+function filterNetworks() { filterText = document.getElementById('net-filter').value.toLowerCase(); renderTable(); }
+
+function secBadge(auth) {
+  if (!auth || auth === '[ESS]') return '<span class="sec open">OPEN</span>';
+  if (auth.includes('WPA3'))    return '<span class="sec wpa3">WPA3</span>';
+  if (auth.includes('WPA2'))    return '<span class="sec wpa2">WPA2</span>';
+  if (auth.includes('WPA'))     return '<span class="sec wpa">WPA</span>';
+  if (auth.includes('WEP'))     return '<span class="sec wep">WEP</span>';
+  return '<span class="sec open">OPEN</span>';
+}
+
+function rssiBar(rssi) {
+  const pct = Math.max(0, Math.min(100, (rssi + 100) * 2));
+  const color = pct > 60 ? '#00ff88' : pct > 30 ? '#ffd700' : '#ff4455';
+  return `<span class="rssi-bar" style="width:${pct/3}px;background:${color}"></span>`;
+}
+
+function renderTable() {
+  const nets  = Object.values(networks);
+  const sort  = document.getElementById('net-sort').value;
+  const filt  = filterText;
+
+  let filtered = filt
+    ? nets.filter(n => (n.ssid||'').toLowerCase().includes(filt) || (n.bssid||'').toLowerCase().includes(filt))
+    : nets;
+
+  filtered.sort((a, b) => {
+    if (sort === 'rssi')       return (b.rssi||0) - (a.rssi||0);
+    if (sort === 'ssid')       return (a.ssid||'').localeCompare(b.ssid||'');
+    if (sort === 'channel')    return (a.channel||0) - (b.channel||0);
+    if (sort === 'first_seen') return (b.first_seen||'') > (a.first_seen||'') ? 1 : -1;
+    return 0;
+  });
+
+  document.getElementById('net-count').textContent = filtered.length;
+
+  const tbody = document.getElementById('net-tbody');
+  tbody.innerHTML = filtered.map(n => {
+    const src = n.source === 'tpager'
+      ? '<span class="src-badge src-tpager">T-Pager</span>'
+      : '<span class="src-badge src-linux">Linux</span>';
+    return `<tr id="row-${n.bssid.replace(/:/g,'')}" onclick="focusNet(${JSON.stringify(n.lat)},${JSON.stringify(n.lon)})">
+      <td class="ssid" title="${escHtml(n.ssid)}">${escHtml(n.ssid)}</td>
+      <td style="font-family:monospace;font-size:10px">${n.bssid}</td>
+      <td>${secBadge(n.auth_mode)}</td>
+      <td>${n.channel||'-'}</td>
+      <td>${n.rssi||'-'}${rssiBar(n.rssi)}</td>
+      <td>${n.lat ? n.lat.toFixed(4) : '-'}</td>
+      <td>${n.lon ? n.lon.toFixed(4) : '-'}</td>
+      <td>${src}</td>
+      <td style="color:var(--muted)">${(n.first_seen||'').slice(11,19)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function flashRow(bssid) {
+  const id  = 'row-' + bssid.replace(/:/g,'');
+  const row = document.getElementById(id);
+  if (row) { row.className = 'new-net'; setTimeout(() => row.className = '', 1100); }
+}
+
+function focusNet(lat, lon) {
+  if (lat && lon) { map.setView([lat, lon], 17); switchTab('map'); }
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Tab System ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const names = ['map','networks','wigle-search'];
+    b.className = 'tab-btn' + (names[i] === name ? ' active' : '');
+  });
+  document.querySelectorAll('.tab-pane').forEach(p => p.className = 'tab-pane');
+  document.getElementById('tab-' + name).className = 'tab-pane active';
+  if (name === 'map') map.invalidateSize();
+  if (name === 'networks') renderTable();
+}
+
+// ── Panel Toggle ──────────────────────────────────────────────────────────
+function togglePanel(header) {
+  const body = header.nextElementSibling;
+  body.classList.toggle('collapsed');
+}
+
+// ── GPS Fields ────────────────────────────────────────────────────────────
+function toggleGPSFields() {
+  const mode = document.getElementById('gps-mode').value;
+  document.getElementById('serial-fields').style.display  = mode === 'serial' ? '' : 'none';
+  document.getElementById('manual-fields').style.display  = mode === 'manual' ? '' : 'none';
+}
+
+// ── API Calls ─────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+async function startScan() {
+  const iface    = document.getElementById('iface-select').value;
+  const interval = parseFloat(document.getElementById('scan-interval').value);
+  const r = await api('POST', '/api/scan/start', {interface: iface||null, interval});
+  if (r.success) { setScanning(true, 'linux'); toast('Scanning started', 'ok'); }
+  else toast('Error: ' + r.error, 'err');
+}
+
+async function stopScan() {
+  const r = await api('POST', '/api/scan/stop', {});
+  if (r.success) { setScanning(false, 'none'); toast(`Stopped. ${r.total} networks found.`, 'info'); }
+}
+
+async function clearNets() {
+  if (!confirm('Clear all discovered networks?')) return;
+  await api('POST', '/api/scan/clear', {});
+  networks = {};
+  Object.values(markers).forEach(m => m.remove());
+  Object.keys(markers).forEach(k => delete markers[k]);
+  renderTable();
+  updateStats({total:0,open:0,wpa2:0,wpa3:0,wpa:0,wep:0});
+  toast('Cleared', 'info');
+}
+
+// T-Pager
+async function tpagerConnect() {
+  const port = document.getElementById('tpager-port').value;
+  const baud = document.getElementById('tpager-baud').value;
+  toast('Connecting to T-Pager...', 'info');
+  const r = await api('POST', '/api/tpager/connect', {port: port||null, baudrate: parseInt(baud)});
+  if (!r.success) toast('T-Pager error: ' + r.error, 'err');
+}
+
+async function tpagerDisconnect() {
+  await api('POST', '/api/tpager/disconnect', {});
+  setScanning(false, 'none');
+}
+
+async function tpagerCmd(cmd) {
+  const r = await api('POST', '/api/tpager/cmd', {cmd});
+  if (!r.success) toast('T-Pager cmd failed', 'err');
+  else toast(`Sent: ${cmd}`, 'info');
+}
+
+// GPS
+async function startGPS() {
+  const mode = document.getElementById('gps-mode').value;
+  const port = document.getElementById('gps-port')?.value || '/dev/ttyUSB0';
+  const r = await api('POST', '/api/gps/start', {mode, serial_port: port});
+  if (r.success) {
+    document.getElementById('btn-gps-start').disabled = true;
+    document.getElementById('btn-gps-stop').disabled  = false;
+    toast('GPS started: ' + r.mode, 'ok');
+  } else toast('GPS error: ' + r.error, 'err');
+}
+
+async function stopGPS() {
+  await api('POST', '/api/gps/stop', {});
+  document.getElementById('btn-gps-start').disabled = false;
+  document.getElementById('btn-gps-stop').disabled  = true;
+  toast('GPS stopped', 'info');
+}
+
+async function setManualGPS() {
+  const lat = parseFloat(document.getElementById('man-lat').value);
+  const lon = parseFloat(document.getElementById('man-lon').value);
+  if (isNaN(lat) || isNaN(lon)) { toast('Invalid coordinates', 'err'); return; }
+  const r = await api('POST', '/api/gps/manual', {lat, lon});
+  if (r.success) { toast(`GPS set: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'ok'); map.setView([lat,lon],13); }
+  else toast('Error: ' + r.error, 'err');
+}
+
+// WiGLE
+function _wigleShowLoggedIn(user) {
+  document.getElementById('wigle-user-display').textContent = user;
+  document.getElementById('wigle-logged-in').style.display  = 'block';
+  document.getElementById('wigle-login-form').style.display = 'none';
+}
+function _wigleShowLoginForm() {
+  document.getElementById('wigle-logged-in').style.display  = 'none';
+  document.getElementById('wigle-login-form').style.display = 'block';
+}
+
+async function loadWiGLEStatus() {
+  try {
+    const r = await fetch('/api/wigle/status');
+    const d = await r.json();
+    if (d.saved && d.user) _wigleShowLoggedIn(d.user);
+    else _wigleShowLoginForm();
+  } catch(e) { _wigleShowLoginForm(); }
+}
+loadWiGLEStatus();
+
+async function wigleLogin() {
+  const username = document.getElementById('wigle-username').value.trim();
+  const password = document.getElementById('wigle-password').value.trim();
+  const el       = document.getElementById('wigle-auth-result');
+  if (!username || !password) { el.innerHTML='<div class="wigle-result wigle-err">Enter username and password</div>'; return; }
+  el.innerHTML = '<span class="spinner"></span> Logging in...';
+  const r = await api('POST', '/api/wigle/login', {username, password});
+  if (r.success) {
+    el.innerHTML = '';
+    document.getElementById('wigle-password').value = '';
+    _wigleShowLoggedIn(r.user);
+    toast('Logged in to WiGLE', 'ok');
+  } else {
+    el.innerHTML = `<div class="wigle-result wigle-err">✗ ${r.error}</div>`;
+    toast('Login failed', 'err');
+  }
+}
+
+async function wigleLogout() {
+  await api('POST', '/api/wigle/logout', {});
+  document.getElementById('wigle-username').value = '';
+  document.getElementById('wigle-password').value = '';
+  document.getElementById('wigle-auth-result').innerHTML = '';
+  _wigleShowLoginForm();
+  toast('Signed out of WiGLE', 'info');
+}
+
+async function wigleUpload() {
+  const donate = document.getElementById('wigle-donate').checked;
+  const el     = document.getElementById('wigle-upload-result');
+  el.innerHTML = '<span class="spinner"></span> Uploading...';
+  const r = await api('POST', '/api/wigle/upload', {donate});
+  if (r.success) {
+    el.innerHTML = `<div class="wigle-result wigle-ok">✓ ${r.message}<br>${r.network_count} networks uploaded</div>`;
+    toast('Upload successful!', 'ok');
+  } else {
+    el.innerHTML = `<div class="wigle-result wigle-err">✗ ${r.error}</div>`;
+    toast('Upload failed: ' + r.error, 'err');
+  }
+}
+
+async function wigleSearch() {
+  const lat    = document.getElementById('search-lat').value;
+  const lon    = document.getElementById('search-lon').value;
+  const radius = document.getElementById('search-radius').value;
+  const el     = document.getElementById('wigle-search-results');
+  el.innerHTML = '<div style="text-align:center;margin-top:30px"><span class="spinner"></span> Searching WiGLE...</div>';
+  const body = {};
+  if (lat) body.lat = parseFloat(lat);
+  if (lon) body.lon = parseFloat(lon);
+  body.radius = parseFloat(radius);
+  const r = await api('POST', '/api/wigle/search', body);
+  if (r.success) {
+    const results = r.data?.results || [];
+    if (!results.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;margin-top:40px">No results found in this area.</div>'; return; }
+    el.innerHTML = `<div style="color:var(--muted);margin-bottom:10px">${results.length} networks found on WiGLE</div>` +
+      results.slice(0,100).map(n => `
+        <div class="wigle-result" style="margin-bottom:6px">
+          <b>${escHtml(n.ssid||'<hidden>')}</b>
+          <span style="color:var(--muted);float:right;font-size:10px">${n.encryption||''}</span><br>
+          <span style="font-size:10px;color:var(--muted)">${n.netid} · Ch ${n.channel} · ${n.lastupdt||''}</span>
+          <button class="btn btn-dark" style="padding:2px 7px;font-size:10px;margin-left:8px"
+            onclick="map.setView([${n.trilat},${n.trilong}],17);switchTab('map')">MAP</button>
+        </div>`).join('');
+  } else {
+    el.innerHTML = `<div class="wigle-result wigle-err">Error: ${r.error}</div>`;
+  }
+}
+
+function useGPSForSearch() {
+  if (gpsPos && gpsPos.lat) {
+    document.getElementById('search-lat').value = gpsPos.lat.toFixed(6);
+    document.getElementById('search-lon').value = gpsPos.lon.toFixed(6);
+  } else toast('No GPS fix available', 'err');
+}
+
+function exportFile(fmt) {
+  window.location.href = `/api/export/${fmt}`;
+}
+
+// ── Phone GPS ─────────────────────────────────────────────────────────────
+async function loadPhoneURL() {
+  try {
+    const r = await fetch('/api/phone/url');
+    const d = await r.json();
+    document.getElementById('phone-url-box').innerHTML =
+      `<a href="${d.url}" target="_blank" style="color:var(--accent);font-size:12px;word-break:break-all">${d.url}</a>
+       <br><small style="color:var(--muted)">Open on phone (same WiFi)</small>`;
+    document.getElementById('tcp-host-hint').textContent = d.local_ip;
+    document.getElementById('tcp-port-hint').textContent = '10110';
+
+    // Try to show QR code
+    const qrBox = document.getElementById('qr-box');
+    const qrResp = await fetch('/api/phone/qr');
+    if (qrResp.headers.get('content-type')?.includes('image')) {
+      const blob = await qrResp.blob();
+      const url  = URL.createObjectURL(blob);
+      qrBox.innerHTML = `<img src="${url}" style="width:140px;height:140px;border-radius:8px" title="Scan to open GPS page on phone"/>
+                         <div style="font-size:10px;color:var(--muted);margin-top:4px">Scan with phone camera</div>`;
+    } else {
+      const j = await qrResp.json();
+      qrBox.innerHTML = `<div style="font-size:10px;color:var(--muted)">Install qrcode: python3 -m pip install qrcode[pil]</div>`;
+    }
+  } catch(e) {
+    document.getElementById('phone-url-box').innerHTML = '<span style="color:var(--red)">Could not get URL</span>';
+  }
+}
+
+// Refresh QR / phone URL when network changes
+socket.on('ip_changed', () => { loadPhoneURL(); });
+
+socket.on('gps_update', (fix) => {
+  if (fix.source === 'phone-browser' || (fix.source && fix.source.startsWith('tcp:'))) {
+    document.getElementById('dot-phone').className = 'dot green';
+    document.getElementById('lbl-phone').textContent = `PHONE GPS: ${fix.source}`;
+  }
+});
+
+socket.on('phone_gps_status', (d) => {
+  document.getElementById('dot-phone').className = 'dot green';
+  document.getElementById('lbl-phone').textContent = `PHONE GPS: ${d.source}`;
+});
+
+async function startTCPNMEA() {
+  const port = parseInt(document.getElementById('tcp-port').value);
+  const r = await api('POST', '/api/phone/tcp/start', {port});
+  if (r.success) {
+    document.getElementById('btn-tcp-start').disabled = true;
+    document.getElementById('btn-tcp-stop').disabled  = false;
+    document.getElementById('tcp-status-txt').textContent = `Listening on :${port} — connect your GPS app`;
+    document.getElementById('tcp-status-txt').style.color = 'var(--green)';
+    toast(`TCP NMEA listening on port ${port}`, 'ok');
+  } else {
+    toast('TCP NMEA error: ' + r.error, 'err');
+  }
+}
+
+async function stopTCPNMEA() {
+  await api('POST', '/api/phone/tcp/stop', {});
+  document.getElementById('btn-tcp-start').disabled = false;
+  document.getElementById('btn-tcp-stop').disabled  = true;
+  document.getElementById('tcp-status-txt').textContent = '';
+  toast('TCP NMEA stopped', 'info');
+}
+
+// Load phone URL on page load
+loadPhoneURL();
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = type;
+  el.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.style.display = 'none', 3500);
+}
+</script>
+</body>
+</html>

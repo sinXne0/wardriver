@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#0a0e1a"/>
+  <title>WardriverPy Mobile</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --bg:#0a0e1a; --bg2:#111827; --bg3:#1c2333;
+      --accent:#00d4ff; --green:#00ff88; --red:#ff4455;
+      --yellow:#ffd700; --orange:#ff8c00; --purple:#9b59ff;
+      --bt-color:#0082fc; --ble-color:#7b61ff;
+      --text:#e0e8f0; --muted:#6b7a99; --border:#1e2d4a;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;font-size:13px;
+         height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+    /* ── Top bar ── */
+    .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 12px;
+            display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .topbar .logo{font-size:14px;font-weight:bold;color:var(--accent);letter-spacing:1px}
+    .topbar .logo span{color:var(--green)}
+    .indicators{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+    .ind{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:bold}
+    .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .dot.g{background:var(--green);animation:pulse 1.5s infinite}
+    .dot.r{background:var(--red)}
+    .dot.y{background:var(--yellow);animation:pulse 1s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+    /* ── Content ── */
+    .content{flex:1;overflow:hidden;position:relative}
+    .tab-pane{display:none;position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .tab-pane.active{display:block}
+
+    /* ── Bottom nav ── */
+    .bottomnav{background:var(--bg2);border-top:1px solid var(--border);
+               display:flex;flex-shrink:0;safe-area-inset-bottom:env(safe-area-inset-bottom)}
+    .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+             padding:8px 4px;gap:3px;cursor:pointer;color:var(--muted);font-size:9px;
+             text-transform:uppercase;letter-spacing:.5px;border:none;background:none;font-family:inherit;
+             transition:color .15s;position:relative}
+    .nav-btn.active{color:var(--accent)}
+    .nav-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .nav-badge{position:absolute;top:4px;right:calc(50% - 14px);background:var(--red);color:#fff;
+               font-size:8px;padding:1px 4px;border-radius:8px;font-weight:bold;display:none}
+
+    /* ── Cards ── */
+    .page-pad{padding:12px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;
+          padding:12px 14px;margin-bottom:10px}
+    .card-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px}
+
+    /* ── Big stats ── */
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+    .stat-box{background:var(--bg3);border-radius:8px;padding:10px 6px;text-align:center}
+    .stat-box .v{font-size:24px;font-weight:bold;color:var(--accent)}
+    .stat-box .l{font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+    .stat-box.g .v{color:var(--green)}
+    .stat-box.r .v{color:var(--red)}
+    .stat-box.p .v{color:var(--purple)}
+    .stat-box.bt .v{color:var(--bt-color)}
+    .stat-box.ble .v{color:var(--ble-color)}
+    .stat-box.y .v{color:var(--yellow)}
+
+    /* ── Scan button (FAB) ── */
+    .scan-fab{width:100%;padding:14px;border-radius:10px;border:none;cursor:pointer;
+              font-family:inherit;font-size:15px;font-weight:bold;text-transform:uppercase;
+              letter-spacing:1px;transition:all .2s;margin-bottom:10px}
+    .scan-fab.start{background:var(--green);color:#000}
+    .scan-fab.stop {background:var(--red);color:#fff}
+    .scan-fab.running{animation:scanpulse 2s infinite}
+    @keyframes scanpulse{0%,100%{box-shadow:0 0 0 0 rgba(0,255,136,.4)}50%{box-shadow:0 0 0 8px rgba(0,255,136,0)}}
+
+    /* ── GPS box ── */
+    .gps-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .gps-item{background:var(--bg3);border-radius:8px;padding:9px 10px}
+    .gps-item .lbl{font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+    .gps-item .val{font-size:14px;font-weight:bold}
+    .gps-item.accent .val{color:var(--accent)}
+    .gps-item.green  .val{color:var(--green)}
+    .fix-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;
+               font-size:11px;font-weight:bold;margin-bottom:10px}
+    .fix-badge.ok {background:rgba(0,255,136,.12);color:var(--green);border:1px solid var(--green)}
+    .fix-badge.bad{background:rgba(255,68,85,.12);color:var(--red);border:1px solid var(--red)}
+    .acc-bar{height:5px;border-radius:3px;background:var(--bg3);overflow:hidden;margin-top:8px}
+    .acc-fill{height:100%;border-radius:3px;transition:width .5s,background .5s}
+
+    /* ── GPS stream button ── */
+    .gps-stream-btn{width:100%;padding:12px;border-radius:8px;border:none;cursor:pointer;
+                    font-family:inherit;font-size:13px;font-weight:bold;margin-top:8px;
+                    text-transform:uppercase;letter-spacing:1px}
+    .gps-stream-btn.on {background:var(--green);color:#000}
+    .gps-stream-btn.off{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+
+    /* ── Network list ── */
+    .net-item{background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+              padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s}
+    .net-item:active{border-color:var(--accent)}
+    .net-item.new-flash{animation:flash .8s ease}
+    @keyframes flash{0%{background:rgba(0,255,136,.15)}100%{background:var(--bg2)}}
+    .net-ssid{font-size:13px;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:4px}
+    .net-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .sec-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:bold}
+    .sec-open{background:rgba(255,68,85,.2);color:var(--red)}
+    .sec-wep {background:rgba(255,140,0,.2);color:var(--orange)}
+    .sec-wpa {background:rgba(0,212,255,.2);color:var(--accent)}
+    .sec-wpa2{background:rgba(0,255,136,.2);color:var(--green)}
+    .sec-wpa3{background:rgba(155,89,255,.2);color:var(--purple)}
+    .sec-bt  {background:rgba(0,130,252,.2);color:var(--bt-color)}
+    .sec-ble {background:rgba(123,97,255,.2);color:var(--ble-color)}
+    .rssi-dots{display:flex;gap:2px;align-items:flex-end}
+    .rssi-dot{width:4px;border-radius:1px;background:var(--border)}
+    .rssi-dot.on{background:var(--green)}
+    .net-bssid{font-size:10px;color:var(--muted);font-family:monospace}
+    .net-filter{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);
+                padding:8px 10px;border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:10px}
+    .net-filter:focus{border-color:var(--accent);outline:none}
+    .net-tabs{display:flex;gap:6px;margin-bottom:10px}
+    .net-tab-btn{flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);
+                 background:var(--bg3);color:var(--muted);font-family:inherit;font-size:11px;
+                 font-weight:bold;cursor:pointer;text-transform:uppercase}
+    .net-tab-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+
+    /* ── Map ── */
+    #map{width:100%;height:100%}
+
+    /* ── BT ── */
+    .bt-toggle-row{display:flex;gap:8px;margin-bottom:10px}
+    .toggle-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);
+                background:var(--bg3);color:var(--muted);font-family:inherit;
+                font-size:11px;font-weight:bold;cursor:pointer;text-transform:uppercase;transition:all .15s}
+    .toggle-btn.active-bt {background:rgba(0,130,252,.2);color:var(--bt-color);border-color:var(--bt-color)}
+    .toggle-btn.active-ble{background:rgba(123,97,255,.2);color:var(--ble-color);border-color:var(--ble-color)}
+    .bt-fab{width:100%;padding:12px;border-radius:10px;border:none;cursor:pointer;
+            font-family:inherit;font-size:14px;font-weight:bold;text-transform:uppercase;
+            letter-spacing:1px;margin-top:6px;transition:all .2s}
+    .bt-fab.start{background:var(--bt-color);color:#fff}
+    .bt-fab.stop {background:var(--red);color:#fff}
+
+    /* ── WiGLE ── */
+    .input-field{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);
+                 padding:10px;border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:8px}
+    .input-field:focus{border-color:var(--accent);outline:none}
+    .wigle-btn{width:100%;padding:12px;border-radius:8px;border:none;cursor:pointer;
+               font-family:inherit;font-size:13px;font-weight:bold;text-transform:uppercase;
+               letter-spacing:1px;margin-top:6px;transition:all .2s}
+    .wigle-btn.verify{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+    .wigle-btn.upload{background:var(--accent);color:#000}
+    .wigle-btn:active{filter:brightness(1.15)}
+    .result-box{border-radius:8px;padding:10px;font-size:11px;margin-top:6px}
+    .result-ok {background:rgba(0,255,136,.1);border:1px solid var(--green);color:var(--green)}
+    .result-err{background:rgba(255,68,85,.1);border:1px solid var(--red);color:var(--red)}
+    .export-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+    .exp-btn{padding:10px 4px;border-radius:8px;border:1px solid var(--border);
+             background:var(--bg3);color:var(--text);font-family:inherit;
+             font-size:11px;font-weight:bold;cursor:pointer;text-transform:uppercase;text-align:center;text-decoration:none;display:block}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);
+           background:var(--bg3);border:1px solid var(--border);padding:8px 16px;
+           border-radius:20px;z-index:9999;display:none;font-size:12px;
+           white-space:nowrap;pointer-events:none}
+    #toast.ok {border-color:var(--green);color:var(--green)}
+    #toast.err{border-color:var(--red);color:var(--red)}
+    #toast.info{border-color:var(--accent);color:var(--accent)}
+
+    /* ── Spinner ── */
+    .spin{border:2px solid var(--border);border-top:2px solid var(--accent);
+          border-radius:50%;width:14px;height:14px;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle}
+    @keyframes sp{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+
+<!-- ─── Top bar ─── -->
+<div class="topbar">
+  <div class="logo">WARD<span>RIVER</span></div>
+  <div class="indicators">
+    <div class="ind"><div class="dot r" id="d-wifi"></div><span id="l-wifi">IDLE</span></div>
+    <div class="ind"><div class="dot r" id="d-bt"></div><span id="l-bt">BT</span></div>
+    <div class="ind"><div class="dot r" id="d-gps"></div><span id="l-gps">GPS</span></div>
+    <div class="ind" style="color:var(--accent)"><b id="l-total">0</b></div>
+  </div>
+</div>
+
+<!-- ─── Content ─── -->
+<div class="content">
+
+  <!-- ─ Dashboard ─ -->
+  <div class="tab-pane active" id="pane-dash">
+    <div class="page-pad">
+
+      <!-- WiFi scan FAB -->
+      <button class="scan-fab start" id="fab-wifi" onclick="toggleWifiScan()">START WIFI SCAN</button>
+
+      <!-- Stats -->
+      <div class="stat-row">
+        <div class="stat-box"><div class="v" id="s-total">0</div><div class="l">Total</div></div>
+        <div class="stat-box r"><div class="v" id="s-open">0</div><div class="l">Open</div></div>
+        <div class="stat-box g"><div class="v" id="s-wpa2">0</div><div class="l">WPA2</div></div>
+        <div class="stat-box p"><div class="v" id="s-wpa3">0</div><div class="l">WPA3</div></div>
+        <div class="stat-box bt"><div class="v" id="s-bt">0</div><div class="l">BT</div></div>
+        <div class="stat-box ble"><div class="v" id="s-ble">0</div><div class="l">BLE</div></div>
+      </div>
+
+      <!-- GPS status -->
+      <div class="card">
+        <div class="card-title">GPS</div>
+        <!-- HTTPS required banner (shown only on HTTP) -->
+        <div id="gps-https-banner" style="display:none;background:rgba(255,140,0,.12);border:1px solid var(--orange);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--orange)">
+          GPS requires a secure connection.<br>
+          <a id="gps-https-link" href="#" style="color:var(--accent);font-weight:bold;text-decoration:underline">
+            Tap here to open secure version &rarr;
+          </a><br>
+          <span style="color:var(--muted);font-size:10px">Accept the certificate warning once, then GPS will work.</span>
+        </div>
+        <div class="fix-badge bad" id="fix-badge"><div class="dot r" id="fix-dot"></div><span id="fix-txt">No Fix</span></div>
+        <div class="gps-grid">
+          <div class="gps-item accent"><div class="lbl">Lat</div><div class="val" id="g-lat">—</div></div>
+          <div class="gps-item accent"><div class="lbl">Lon</div><div class="val" id="g-lon">—</div></div>
+          <div class="gps-item"><div class="lbl">Alt (m)</div><div class="val" id="g-alt">—</div></div>
+          <div class="gps-item green"><div class="lbl">Accuracy</div><div class="val" id="g-acc">—</div></div>
+        </div>
+        <div class="acc-bar"><div class="acc-fill" id="acc-fill" style="width:0%"></div></div>
+        <button class="gps-stream-btn off" id="btn-gps-stream" onclick="toggleGPSStream()">
+          START GPS STREAMING
+        </button>
+      </div>
+
+      <!-- BT scan -->
+      <div class="card">
+        <div class="card-title">Bluetooth</div>
+        <div class="bt-toggle-row">
+          <button class="toggle-btn active-ble" id="tog-ble" onclick="toggleBLEOption()">BLE</button>
+          <button class="toggle-btn" id="tog-classic" onclick="toggleClassicOption()">Classic BT</button>
+        </div>
+        <button class="bt-fab start" id="fab-bt" onclick="toggleBTScan()">START BT SCAN</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─ Networks ─ -->
+  <div class="tab-pane" id="pane-nets">
+    <div class="page-pad">
+      <div class="net-tabs">
+        <button class="net-tab-btn active" id="ntab-all"  onclick="setNetTab('all')">All</button>
+        <button class="net-tab-btn"        id="ntab-wifi" onclick="setNetTab('wifi')">WiFi</button>
+        <button class="net-tab-btn"        id="ntab-bt"   onclick="setNetTab('bt')">BT/BLE</button>
+      </div>
+      <input class="net-filter" type="search" id="net-filter" placeholder="Filter SSID / MAC..." oninput="renderNets()"/>
+      <div id="net-count" style="font-size:10px;color:var(--muted);margin-bottom:8px">0 networks</div>
+      <div id="net-list"></div>
+    </div>
+  </div>
+
+  <!-- ─ Map ─ -->
+  <div class="tab-pane" id="pane-map">
+    <div id="map"></div>
+  </div>
+
+  <!-- ─ WiGLE ─ -->
+  <div class="tab-pane" id="pane-wigle">
+    <div class="page-pad">
+
+      <div class="card">
+        <div class="card-title">WiGLE Login</div>
+        <!-- Logged-in state -->
+        <div id="w-logged-in" style="display:none;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(0,255,136,.08);border:1px solid var(--green);border-radius:8px;padding:10px">
+            <div class="dot g"></div>
+            <span style="color:var(--green);font-size:12px;font-weight:bold">Logged in as <span id="w-user-display"></span></span>
+          </div>
+          <button class="wigle-btn verify" style="margin-top:8px" onclick="wigleLogout()">LOGOUT</button>
+        </div>
+        <!-- Login form -->
+        <div id="w-login-form">
+          <input class="input-field" id="w-username" type="text"     autocomplete="username"  placeholder="WiGLE Username"/>
+          <input class="input-field" id="w-password" type="password" autocomplete="current-password" placeholder="WiGLE Password"/>
+          <button class="wigle-btn verify" onclick="wigleLogin()">LOGIN TO WIGLE</button>
+          <div id="w-auth-result"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Upload</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;font-size:12px">
+          <input type="checkbox" id="w-donate"/> Donate to WiGLE community
+        </label>
+        <button class="wigle-btn upload" onclick="wigleUpload()">UPLOAD TO WIGLE</button>
+        <div id="w-upload-result"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Export</div>
+        <div class="export-row">
+          <a class="exp-btn" href="/api/export/csv">CSV</a>
+          <a class="exp-btn" href="/api/export/kml">KML</a>
+          <a class="exp-btn" href="/api/export/json">JSON</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─ Settings ─ -->
+  <div class="tab-pane" id="pane-settings">
+    <div class="page-pad">
+
+      <div class="card">
+        <div class="card-title">WiFi Interface</div>
+        <select class="input-field" id="iface-sel" style="margin-bottom:0">
+          <option value="">Auto-detect</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Scan Interval (seconds)</div>
+        <input class="input-field" type="number" id="scan-interval" value="5" min="2" max="60" style="margin-bottom:0"/>
+      </div>
+
+      <div class="card">
+        <div class="card-title">T-Pager (ESP32)</div>
+        <select class="input-field" id="tp-port">
+          <option value="">Auto-detect</option>
+        </select>
+        <div class="bt-toggle-row">
+          <button class="toggle-btn" id="btn-tp-connect" onclick="tpagerConnect()">CONNECT</button>
+          <button class="toggle-btn" id="btn-tp-disco"   onclick="tpagerDisconnect()">DISCONNECT</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px" id="tp-status-txt">Status: unknown</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Data</div>
+        <button class="wigle-btn verify" onclick="clearAll()">CLEAR ALL NETWORKS</button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- ─── Bottom Nav ─── -->
+<nav class="bottomnav">
+  <button class="nav-btn active" id="nav-dash" onclick="gotoTab('dash')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Dash
+  </button>
+  <button class="nav-btn" id="nav-nets" onclick="gotoTab('nets')">
+    <div class="nav-badge" id="badge-new">0</div>
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="13" x2="5" y2="17"/><line x1="12" y1="13" x2="19" y2="17"/></svg>
+    Networks
+  </button>
+  <button class="nav-btn" id="nav-map" onclick="gotoTab('map')">
+    <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    Map
+  </button>
+  <button class="nav-btn" id="nav-wigle" onclick="gotoTab('wigle')">
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    WiGLE
+  </button>
+  <button class="nav-btn" id="nav-settings" onclick="gotoTab('settings')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Settings
+  </button>
+</nav>
+
+<div id="toast"></div>
+
+<script src="/static/socket.io.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let networks   = {};
+let gpsPos     = null;
+let wifiActive = false;
+let btActive   = false;
+let gpsWatchId = null;
+let doGPSStream = false;
+let doBLE      = true;
+let doClassic  = false;
+let netTab     = 'all';
+let newNetCount = 0;
+
+// ── Map ────────────────────────────────────────────────────────────────────
+const map = L.map('map', {zoomControl:false}).setView([20, 0], 3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+const style = document.createElement('style');
+style.innerHTML = '.leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.85)}';
+document.head.appendChild(style);
+
+const markers = {};
+let gpsMarker = null;
+
+function secColor(auth, type) {
+  if (type === 'BLE')    return '#7b61ff';
+  if (type === 'BT')     return '#0082fc';
+  if (!auth || auth === '[ESS]') return '#ff4455';
+  if (auth.includes('WPA3')) return '#9b59ff';
+  if (auth.includes('WPA2')) return '#00ff88';
+  if (auth.includes('WPA'))  return '#00d4ff';
+  if (auth.includes('WEP'))  return '#ff8c00';
+  return '#ff4455';
+}
+
+function mkIcon(color) {
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:9px;height:9px;background:${color};border-radius:50%;border:1.5px solid rgba(255,255,255,.4);box-shadow:0 0 5px ${color}"></div>`,
+    iconSize:[9,9], iconAnchor:[4,4]
+  });
+}
+
+function addMarker(net) {
+  if (!net.lat || !net.lon || (net.lat===0 && net.lon===0)) return;
+  const color = secColor(net.auth_mode, net.type);
+  if (markers[net.bssid]) markers[net.bssid].setLatLng([net.lat, net.lon]);
+  else {
+    markers[net.bssid] = L.marker([net.lat,net.lon],{icon:mkIcon(color)})
+      .bindPopup(`<b>${esc(net.ssid)}</b><br>${net.bssid}<br>${net.type} ${net.auth_mode}<br>Ch${net.channel} ${net.rssi}dBm`)
+      .addTo(map);
+  }
+}
+
+// ── Socket ─────────────────────────────────────────────────────────────────
+const socket = io({transports:['websocket'], secure: window.location.protocol === 'https:'});
+
+socket.on('connect', () => toast('Connected', 'ok'));
+socket.on('ip_changed', d => { toast('Network changed — reconnecting…', 'info'); setTimeout(() => location.reload(), 2000); });
+socket.on('disconnect', () => toast('Disconnected', 'err'));
+
+socket.on('init', d => {
+  (d.networks||[]).forEach(n => { networks[n.bssid]=n; addMarker(n); });
+  updateStats(d.stats);
+  if (d.gps) updateGPS(d.gps);
+  setWifiState(d.scanning && d.scan_source==='linux');
+  setBTState(d.bt_scanning||false);
+  renderNets();
+  loadSettings();
+});
+
+socket.on('networks_update', d => {
+  (d.networks||[]).forEach(n => { networks[n.bssid]=n; addMarker(n); });
+  if (d.new_bssids?.length) {
+    d.new_bssids.forEach(b => flashNet(b));
+    newNetCount += d.new_bssids.length;
+    updateNewBadge();
+  }
+  updateStats(d.stats||d.all_stats);
+  if (d.gps) updateGPS(d.gps);
+  renderNets();
+});
+
+socket.on('bt_update', d => {
+  (d.devices||[]).forEach(n => { networks[n.bssid]=n; addMarker(n); });
+  if (d.new_macs?.length) {
+    d.new_macs.forEach(b => flashNet(b));
+    newNetCount += d.new_macs.length;
+    updateNewBadge();
+  }
+  updateStats(d.all_stats);
+  renderNets();
+});
+
+socket.on('gps_update',       d => updateGPS(d));
+socket.on('phone_gps_status', d => updateGPS(d));
+socket.on('phone_gps_ack',    d => { /* silent ack */ });
+
+socket.on('tpager_status', d => {
+  document.getElementById('tp-status-txt').textContent = `Status: ${d.status} ${d.port||''}`;
+  toast(`T-Pager: ${d.status}`, d.status==='connected' ? 'ok' : 'err');
+});
+
+// ── GPS ────────────────────────────────────────────────────────────────────
+function updateGPS(fix) {
+  gpsPos = fix;
+  const hasFix = fix.fix_type && fix.fix_type !== 'none' && (fix.lat || fix.lon);
+  const badge = document.getElementById('fix-badge');
+  badge.className = 'fix-badge ' + (hasFix ? 'ok' : 'bad');
+  document.getElementById('fix-dot').className = 'dot ' + (hasFix ? 'g' : 'r');
+  document.getElementById('fix-txt').textContent  = hasFix ? fix.fix_type.toUpperCase() + ' FIX' : 'No Fix';
+  document.getElementById('g-lat').textContent = fix.lat ? fix.lat.toFixed(5) : '—';
+  document.getElementById('g-lon').textContent = fix.lon ? fix.lon.toFixed(5) : '—';
+  document.getElementById('g-alt').textContent = fix.alt ? fix.alt.toFixed(1) : '—';
+  document.getElementById('g-acc').textContent = fix.accuracy ? '±'+fix.accuracy.toFixed(0)+'m' : '—';
+  document.getElementById('d-gps').className = 'dot ' + (hasFix ? 'g' : 'r');
+  document.getElementById('l-gps').textContent = hasFix ? fix.fix_type.toUpperCase() : 'GPS';
+
+  const pct = fix.accuracy ? Math.max(0, 100 - fix.accuracy) : 0;
+  const fill = document.getElementById('acc-fill');
+  fill.style.width = pct + '%';
+  fill.style.background = fix.accuracy < 10 ? '#00ff88' : fix.accuracy < 30 ? '#ffd700' : '#ff4455';
+
+  if (hasFix) {
+    if (!gpsMarker) {
+      gpsMarker = L.marker([fix.lat,fix.lon],{icon:L.divIcon({
+        className:'',
+        html:'<div style="width:12px;height:12px;background:#fff;border-radius:50%;border:2.5px solid #00d4ff;box-shadow:0 0 8px #00d4ff"></div>',
+        iconSize:[12,12],iconAnchor:[6,6]
+      })}).addTo(map).bindPopup('Your Position');
+    } else gpsMarker.setLatLng([fix.lat,fix.lon]);
+  }
+}
+
+function toggleGPSStream() {
+  if (doGPSStream) {
+    stopGPSStream();
+  } else {
+    startGPSStream();
+  }
+}
+
+function startGPSStream() {
+  if (!navigator.geolocation || window.location.protocol !== 'https:') {
+    const httpsPort = parseInt(window.location.port || 5001) - 1;
+    window.location.href = 'https://' + window.location.hostname + ':' + httpsPort + '/phone';
+    return;
+  }
+  gpsWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const c = pos.coords;
+      socket.emit('phone_gps', {
+        lat:c.latitude, lon:c.longitude, alt:c.altitude||0,
+        accuracy:c.accuracy, speed:c.speed||0, heading:c.heading||0,
+        timestamp:pos.timestamp
+      });
+    },
+    err => { toast('GPS: ' + ['','Permission denied','Unavailable','Timeout'][err.code], 'err'); },
+    {enableHighAccuracy:true, timeout:10000, maximumAge:1000}
+  );
+  doGPSStream = true;
+  const btn = document.getElementById('btn-gps-stream');
+  btn.textContent = 'STOP GPS STREAMING';
+  btn.className = 'gps-stream-btn on';
+  toast('GPS streaming started', 'ok');
+}
+
+function stopGPSStream() {
+  if (gpsWatchId !== null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+  doGPSStream = false;
+  const btn = document.getElementById('btn-gps-stream');
+  btn.textContent = 'START GPS STREAMING';
+  btn.className = 'gps-stream-btn off';
+  toast('GPS streaming stopped', 'info');
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function updateStats(s) {
+  if (!s) return;
+  const t = s.total||0;
+  document.getElementById('s-total').textContent = t;
+  document.getElementById('s-open').textContent  = s.open||0;
+  document.getElementById('s-wpa2').textContent  = s.wpa2||0;
+  document.getElementById('s-wpa3').textContent  = s.wpa3||0;
+  document.getElementById('s-bt').textContent    = s.bt_classic||0;
+  document.getElementById('s-ble').textContent   = s.ble||0;
+  document.getElementById('l-total').textContent = t;
+}
+
+// ── WiFi Scan ──────────────────────────────────────────────────────────────
+function setWifiState(active) {
+  wifiActive = active;
+  const fab = document.getElementById('fab-wifi');
+  fab.textContent = active ? 'STOP WIFI SCAN' : 'START WIFI SCAN';
+  fab.className   = 'scan-fab ' + (active ? 'stop running' : 'start');
+  document.getElementById('d-wifi').className = 'dot ' + (active ? 'g' : 'r');
+  document.getElementById('l-wifi').textContent = active ? 'SCAN' : 'IDLE';
+}
+
+async function toggleWifiScan() {
+  if (wifiActive) {
+    const r = await api('POST', '/api/scan/stop', {});
+    if (r.success) { setWifiState(false); toast(`Stopped. ${r.total} networks.`, 'info'); }
+  } else {
+    const iface    = document.getElementById('iface-sel').value;
+    const interval = parseFloat(document.getElementById('scan-interval').value)||5;
+    const r = await api('POST', '/api/scan/start', {interface:iface||null, interval});
+    if (r.success) { setWifiState(true); toast('WiFi scan started', 'ok'); }
+    else toast('Error: '+r.error, 'err');
+  }
+}
+
+// ── BT Scan ────────────────────────────────────────────────────────────────
+function setBTState(active) {
+  btActive = active;
+  const fab = document.getElementById('fab-bt');
+  fab.textContent = active ? 'STOP BT SCAN' : 'START BT SCAN';
+  fab.className   = 'bt-fab ' + (active ? 'stop' : 'start');
+  document.getElementById('d-bt').className = 'dot ' + (active ? 'g' : 'r');
+  document.getElementById('l-bt').textContent = active ? 'BT ON' : 'BT';
+}
+
+function toggleBLEOption() {
+  doBLE = !doBLE;
+  document.getElementById('tog-ble').className = 'toggle-btn' + (doBLE ? ' active-ble' : '');
+}
+function toggleClassicOption() {
+  doClassic = !doClassic;
+  document.getElementById('tog-classic').className = 'toggle-btn' + (doClassic ? ' active-bt' : '');
+}
+
+async function toggleBTScan() {
+  if (btActive) {
+    const r = await api('POST', '/api/bt/stop', {});
+    if (r.success) { setBTState(false); toast(`BT stopped. ${r.total} devices.`, 'info'); }
+  } else {
+    const r = await api('POST', '/api/bt/start', {ble:doBLE, classic:doClassic, interval:15});
+    if (r.success) { setBTState(true); toast('BT scan started', 'ok'); }
+    else toast('BT error: '+r.error, 'err');
+  }
+}
+
+// ── Network List ───────────────────────────────────────────────────────────
+function setNetTab(t) {
+  netTab = t;
+  ['all','wifi','bt'].forEach(n => {
+    document.getElementById('ntab-'+n).className = 'net-tab-btn' + (n===t ? ' active' : '');
+  });
+  renderNets();
+}
+
+function renderNets() {
+  const filt = (document.getElementById('net-filter')?.value||'').toLowerCase();
+  let nets = Object.values(networks);
+
+  if (netTab === 'wifi') nets = nets.filter(n => n.type === 'WIFI');
+  if (netTab === 'bt')   nets = nets.filter(n => n.type === 'BT' || n.type === 'BLE');
+  if (filt) nets = nets.filter(n =>
+    (n.ssid||'').toLowerCase().includes(filt) || (n.bssid||'').toLowerCase().includes(filt));
+
+  nets.sort((a,b) => (b.rssi||0) - (a.rssi||0));
+
+  document.getElementById('net-count').textContent = nets.length + ' networks';
+  document.getElementById('net-list').innerHTML = nets.map(n => {
+    const sec = secBadge(n.auth_mode, n.type);
+    const bars = rssiBars(n.rssi);
+    return `<div class="net-item" id="ni-${n.bssid.replace(/:/g,'')}" onclick="focusOnMap(${n.lat},${n.lon})">
+      <div class="net-ssid">${esc(n.ssid)}</div>
+      <div class="net-meta">
+        ${sec}
+        <div class="rssi-dots">${bars}</div>
+        <span style="font-size:10px;color:var(--muted)">Ch${n.channel||'?'}</span>
+        ${n.source==='tpager'?'<span style="font-size:9px;color:var(--purple)">T-Pager</span>':''}
+      </div>
+      <div class="net-bssid">${n.bssid}</div>
+    </div>`;
+  }).join('');
+}
+
+function secBadge(auth, type) {
+  if (type==='BLE')             return '<span class="sec-badge sec-ble">BLE</span>';
+  if (type==='BT')              return '<span class="sec-badge sec-bt">BT</span>';
+  if (!auth||auth==='[ESS]')   return '<span class="sec-badge sec-open">OPEN</span>';
+  if (auth.includes('WPA3'))   return '<span class="sec-badge sec-wpa3">WPA3</span>';
+  if (auth.includes('WPA2'))   return '<span class="sec-badge sec-wpa2">WPA2</span>';
+  if (auth.includes('WPA'))    return '<span class="sec-badge sec-wpa">WPA</span>';
+  if (auth.includes('WEP'))    return '<span class="sec-badge sec-wep">WEP</span>';
+  return '<span class="sec-badge sec-open">OPEN</span>';
+}
+
+function rssiBars(rssi) {
+  const pct = Math.max(0, Math.min(100, (rssi+100)*2));
+  const bars = 4;
+  return Array.from({length:bars}, (_,i) => {
+    const h = 4 + i*3;
+    const on = pct > (i/bars)*100;
+    return `<div class="rssi-dot ${on?'on':''}" style="height:${h}px"></div>`;
+  }).join('');
+}
+
+function flashNet(bssid) {
+  const el = document.getElementById('ni-' + bssid.replace(/:/g,''));
+  if (el) { el.className='net-item new-flash'; setTimeout(()=>el.className='net-item',900); }
+}
+
+function focusOnMap(lat, lon) {
+  if (lat && lon) { gotoTab('map'); setTimeout(()=>{ map.invalidateSize(); map.setView([lat,lon],17); },100); }
+}
+
+function updateNewBadge() {
+  const badge = document.getElementById('badge-new');
+  if (newNetCount > 0) { badge.textContent=newNetCount; badge.style.display=''; }
+  else badge.style.display='none';
+}
+
+// ── WiGLE ──────────────────────────────────────────────────────────────────
+function _wigleShowLoggedIn(user) {
+  document.getElementById('w-user-display').textContent = user;
+  document.getElementById('w-logged-in').style.display  = 'block';
+  document.getElementById('w-login-form').style.display = 'none';
+}
+function _wigleShowLoginForm() {
+  document.getElementById('w-logged-in').style.display  = 'none';
+  document.getElementById('w-login-form').style.display = 'block';
+}
+
+async function loadWiGLEStatus() {
+  try {
+    const r = await fetch('/api/wigle/status');
+    const d = await r.json();
+    if (d.saved && d.user) _wigleShowLoggedIn(d.user);
+    else _wigleShowLoginForm();
+  } catch(e) { _wigleShowLoginForm(); }
+}
+
+async function wigleLogin() {
+  const username = document.getElementById('w-username').value.trim();
+  const password = document.getElementById('w-password').value.trim();
+  const el       = document.getElementById('w-auth-result');
+  if (!username || !password) { el.innerHTML='<div class="result-box result-err">Enter username and password</div>'; return; }
+  el.innerHTML = '<span class="spin"></span> Logging in...';
+  const r = await api('POST', '/api/wigle/login', {username, password});
+  if (r.success) {
+    el.innerHTML = '';
+    document.getElementById('w-password').value = '';
+    _wigleShowLoggedIn(r.user);
+    toast('Logged in to WiGLE', 'ok');
+  } else {
+    el.innerHTML = `<div class="result-box result-err">✗ ${r.error}</div>`;
+    toast('Login failed', 'err');
+  }
+}
+
+async function wigleLogout() {
+  await api('POST', '/api/wigle/logout', {});
+  document.getElementById('w-username').value = '';
+  document.getElementById('w-password').value = '';
+  document.getElementById('w-auth-result').innerHTML = '';
+  _wigleShowLoginForm();
+  toast('Signed out of WiGLE', 'info');
+}
+
+async function wigleUpload() {
+  const donate = document.getElementById('w-donate').checked;
+  const el     = document.getElementById('w-upload-result');
+  el.innerHTML = '<span class="spin"></span> Uploading...';
+  const r = await api('POST', '/api/wigle/upload', {donate});
+  el.innerHTML = r.success
+    ? `<div class="result-box result-ok">✓ ${r.message}<br>${r.network_count} networks</div>`
+    : `<div class="result-box result-err">✗ ${r.error}</div>`;
+  toast(r.success ? 'Uploaded!' : 'Upload failed', r.success ? 'ok' : 'err');
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/interfaces');
+    const d = await r.json();
+    const sel = document.getElementById('iface-sel');
+    d.interfaces.forEach(iface => {
+      const o = document.createElement('option');
+      o.value = iface; o.textContent = iface;
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+
+  try {
+    const r = await fetch('/api/tpager/ports');
+    const d = await r.json();
+    const sel = document.getElementById('tp-port');
+    (d.ports||[]).forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.device;
+      o.textContent = p.device + (p.description ? ' - '+p.description.slice(0,20) : '');
+      sel.appendChild(o);
+    });
+    if (d.auto) sel.value = d.auto;
+  } catch(e) {}
+}
+
+async function tpagerConnect() {
+  const port = document.getElementById('tp-port').value;
+  const r = await api('POST', '/api/tpager/connect', {port:port||null, baudrate:115200});
+  if (!r.success) toast('T-Pager error: '+r.error, 'err');
+}
+
+async function tpagerDisconnect() {
+  await api('POST', '/api/tpager/disconnect', {});
+  toast('T-Pager disconnected', 'info');
+}
+
+async function clearAll() {
+  if (!confirm('Clear all networks?')) return;
+  await api('POST', '/api/scan/clear', {});
+  networks = {};
+  Object.values(markers).forEach(m=>m.remove());
+  Object.keys(markers).forEach(k=>delete markers[k]);
+  renderNets();
+  updateStats({total:0,open:0,wpa2:0,wpa3:0,bt_classic:0,ble:0});
+  toast('Cleared', 'info');
+}
+
+// ── Tab Nav ────────────────────────────────────────────────────────────────
+function gotoTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.className='tab-pane');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-'+name).className='tab-pane active';
+  document.getElementById('nav-'+name).classList.add('active');
+  if (name==='map') setTimeout(()=>map.invalidateSize(),100);
+  if (name==='nets') { newNetCount=0; updateNewBadge(); renderNets(); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const opts = {method, headers:{'Content-Type':'application/json'}};
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let toastTmr;
+function toast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent  = msg;
+  el.className    = type;
+  el.style.display = 'block';
+  clearTimeout(toastTmr);
+  toastTmr = setTimeout(()=>el.style.display='none', 2800);
+}
+
+// Load saved WiGLE status
+loadWiGLEStatus();
+
+// ── On HTTP: show GPS banner; on HTTPS: auto-prompt GPS ──────────────────
+window.addEventListener('load', () => {
+  const isHttps = window.location.protocol === 'https:';
+  if (!isHttps) {
+    // Show banner pointing to HTTPS version
+    const httpsPort = parseInt(window.location.port || 5001) - 1;
+    const httpsUrl  = 'https://' + window.location.hostname + ':' + httpsPort + '/phone';
+    const banner = document.getElementById('gps-https-banner');
+    const link   = document.getElementById('gps-https-link');
+    if (banner) banner.style.display = 'block';
+    if (link)   link.href = httpsUrl;
+    // Also update the GPS button label
+    const btn = document.getElementById('btn-gps-stream');
+    if (btn) btn.textContent = 'ENABLE GPS (opens secure page)';
+  } else {
+    // HTTPS — auto-prompt GPS after a short delay
+    setTimeout(() => {
+      if (confirm('Start GPS streaming from this phone?')) startGPSStream();
+    }, 600);
+  }
+});
+</script>
+</body>
+</html>

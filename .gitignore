@@ -1,0 +1,28 @@
+# SSL certificates (auto-generated on startup)
+cert.pem
+key.pem
+
+# Saved credentials
+.wardriver_creds.json
+
+# Exports and logs
+exports/
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Claude IDE settings
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

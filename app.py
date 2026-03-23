@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WardriverPy - Wardriving Tool with WiGLE Integration + T-Pager Support
+WARDAEMON - Wardriving Tool with WiGLE Integration + T-Pager Support
 Flask + SocketIO web UI for real-time WiFi scanning and GPS tracking.
 
 Supports:
@@ -29,7 +29,7 @@ from modules.phone_gps import TCPNMEAServer
 from modules.bt_scanner import BTScanner
 from modules.pi_display import create_display
 from modules.wigle_export import (
-    export_to_csv, export_to_csv_string, export_to_kml, WiGLEUploader, wigle_login
+    export_to_csv, export_to_csv_string, export_to_kml, WiGLEUploader
 )
 import config as cfg
 
@@ -518,19 +518,23 @@ def _wigle_uploader():
 
 @app.route("/api/wigle/login", methods=["POST"])
 def wigle_login_route():
-    """Login with WiGLE username + password."""
-    data     = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-    if not username or not password:
-        return jsonify({"success": False, "error": "Username and password required"})
-    result = wigle_login(username, password)
+    """Save WiGLE API Name + API Token credentials."""
+    import base64 as _b64
+    data      = request.json or {}
+    api_name  = data.get("api_name", "").strip()
+    api_token = data.get("api_token", "").strip()
+    if not api_name or not api_token:
+        return jsonify({"success": False, "error": "API Name and API Token are required"})
+    # Validate by calling the profile endpoint
+    encoded = _b64.b64encode(f"{api_name}:{api_token}".encode()).decode()
+    uploader = WiGLEUploader(encoded)
+    result = uploader.test_auth()
     if result["success"]:
-        state["wigle_user"]       = result.get("user", username)
-        state["wigle_credential"] = result["encoded"]
+        state["wigle_user"]       = api_name
+        state["wigle_credential"] = encoded
         _save_creds()
-        return jsonify({"success": True, "user": state["wigle_user"]})
-    return jsonify(result)
+        return jsonify({"success": True, "user": api_name})
+    return jsonify({"success": False, "error": result.get("error", "Invalid credentials")})
 
 
 @app.route("/api/wigle/status")
@@ -772,7 +776,7 @@ if __name__ == "__main__":
     _http_port = cfg.PORT + 1
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
-║         WardriverPy  •  WiGLE Wardriving Tool                ║
+║            WARDAEMON  •  WiGLE Wardriving Tool               ║
 ║         Platform : {platform_str:<40}║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Dashboard  :  https://{_local_ip}:{cfg.PORT}

@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <meta name="theme-color" content="#0a0e1a"/>
-  <title>WardriverPy Mobile</title>
+  <title>WARDAEMON Mobile</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     :root {
@@ -279,9 +279,10 @@
         </div>
         <!-- Login form -->
         <div id="w-login-form">
-          <input class="input-field" id="w-username" type="text"     autocomplete="username"  placeholder="WiGLE Username"/>
-          <input class="input-field" id="w-password" type="password" autocomplete="current-password" placeholder="WiGLE Password"/>
-          <button class="wigle-btn verify" onclick="wigleLogin()">LOGIN TO WIGLE</button>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Get keys from <a href="https://wigle.net/account" target="_blank" style="color:var(--accent)">wigle.net/account</a></div>
+          <input class="input-field" id="w-api-name"  type="text"     autocomplete="off" placeholder="API Name (AID...)"/>
+          <input class="input-field" id="w-api-token" type="password" autocomplete="off" placeholder="API Token"/>
+          <button class="wigle-btn verify" onclick="wigleLogin()">SAVE CREDENTIALS</button>
           <div id="w-auth-result"></div>
         </div>
       </div>
@@ -711,27 +712,27 @@ async function loadWiGLEStatus() {
 }
 
 async function wigleLogin() {
-  const username = document.getElementById('w-username').value.trim();
-  const password = document.getElementById('w-password').value.trim();
-  const el       = document.getElementById('w-auth-result');
-  if (!username || !password) { el.innerHTML='<div class="result-box result-err">Enter username and password</div>'; return; }
-  el.innerHTML = '<span class="spin"></span> Logging in...';
-  const r = await api('POST', '/api/wigle/login', {username, password});
+  const api_name  = document.getElementById('w-api-name').value.trim();
+  const api_token = document.getElementById('w-api-token').value.trim();
+  const el        = document.getElementById('w-auth-result');
+  if (!api_name || !api_token) { el.innerHTML='<div class="result-box result-err">Enter API Name and API Token</div>'; return; }
+  el.innerHTML = '<span class="spin"></span> Verifying...';
+  const r = await api('POST', '/api/wigle/login', {api_name, api_token});
   if (r.success) {
     el.innerHTML = '';
-    document.getElementById('w-password').value = '';
+    document.getElementById('w-api-token').value = '';
     _wigleShowLoggedIn(r.user);
-    toast('Logged in to WiGLE', 'ok');
+    toast('WiGLE credentials saved', 'ok');
   } else {
     el.innerHTML = `<div class="result-box result-err">✗ ${r.error}</div>`;
-    toast('Login failed', 'err');
+    toast('WiGLE auth failed', 'err');
   }
 }
 
 async function wigleLogout() {
   await api('POST', '/api/wigle/logout', {});
-  document.getElementById('w-username').value = '';
-  document.getElementById('w-password').value = '';
+  document.getElementById('w-api-name').value  = '';
+  document.getElementById('w-api-token').value = '';
   document.getElementById('w-auth-result').innerHTML = '';
   _wigleShowLoginForm();
   toast('Signed out of WiGLE', 'info');

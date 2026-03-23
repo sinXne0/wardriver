@@ -141,37 +141,6 @@ def export_to_kml(networks: list[dict], filepath: str) -> str:
     return filepath
 
 
-def wigle_login(username: str, password: str) -> dict:
-    """
-    Exchange a WiGLE username + password for an encoded API credential.
-    WiGLE API: GET /api/v2/auth/login  (HTTP Basic with username:password)
-    Returns {"success": True, "encoded": "...", "user": "..."}
-    """
-    try:
-        credential = base64.b64encode(f"{username}:{password}".encode()).decode()
-        r = requests.get(
-            "https://api.wigle.net/api/v2/auth/login",
-            headers={
-                "Authorization": f"Basic {credential}",
-                "Accept": "application/json",
-            },
-            timeout=10,
-        )
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("success"):
-                return {
-                    "success": True,
-                    "encoded": data.get("encodedCredentials", ""),
-                    "user": data.get("user", username),
-                }
-            return {"success": False, "error": data.get("message", "Login failed")}
-        if r.status_code == 401:
-            return {"success": False, "error": "Invalid username or password"}
-        return {"success": False, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
 
 class WiGLEUploader:
     """Upload WiGLE CSV files to wigle.net API v2."""

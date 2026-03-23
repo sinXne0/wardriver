@@ -1,4 +1,6 @@
-# WardriverPy
+# WARDAEMON
+
+> _Haunt the spectrum. Log the grid._
 
 A wardriving tool for Linux and Raspberry Pi with a real-time web dashboard and full phone control via QR code.
 
@@ -46,8 +48,8 @@ flask flask-socketio eventlet pyserial requests bleak qrcode[pil] cryptography P
 ## Quick Start
 
 ```bash
-git clone https://github.com/sinXne0/wardriver.git
-cd wardriver
+git clone https://github.com/sinXne0/wardaemon.git
+cd wardaemon
 chmod +x run.sh
 ./run.sh
 ```

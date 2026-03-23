@@ -3,18 +3,25 @@
 set -e
 cd "$(dirname "$0")"
 
+VENV_DIR="$(pwd)/.venv"
+
 # ── Detect Raspberry Pi ───────────────────────────────────────────────────────
 IS_PI=false
 if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
     IS_PI=true
 fi
 
-# ── Check Python deps ─────────────────────────────────────────────────────────
-python3 -c "import flask, flask_socketio, eventlet, serial, bleak, cryptography" 2>/dev/null || {
-    echo "[!] Missing dependencies. Installing..."
-    python3 -m pip install flask flask-socketio eventlet pyserial requests bleak \
-        "qrcode[pil]" cryptography Pillow --break-system-packages -q
-}
+# ── Set up virtualenv ─────────────────────────────────────────────────────────
+if [[ ! -f "$VENV_DIR/bin/python3" ]]; then
+    echo "[→] Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+fi
+
+PYTHON="$VENV_DIR/bin/python3"
+PIP="$VENV_DIR/bin/pip"
+
+# Install/update deps from requirements.txt
+"$PIP" install -q -r requirements.txt
 
 # ── Pi-specific setup ─────────────────────────────────────────────────────────
 if $IS_PI; then
@@ -29,4 +36,4 @@ if $IS_PI; then
     [ -n "$WLAN" ] && sudo iw dev "$WLAN" set power_save off 2>/dev/null || true
 fi
 
-exec python3 app.py
+exec "$PYTHON" app.py

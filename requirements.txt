@@ -1,0 +1,10 @@
+flask
+flask-socketio
+eventlet
+pyserial
+requests
+bleak
+qrcode[pil]
+cryptography
+Pillow
+pygame

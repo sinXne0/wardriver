@@ -12,6 +12,7 @@ import threading
 import time
 import logging
 import asyncio
+import concurrent.futures
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -23,16 +24,35 @@ def _utcnow():
 
 # ── Classic BT via bluetoothctl ───────────────────────────────────────────────
 def scan_classic_bluetoothctl(timeout: int = 10) -> list[dict]:
-    """Scan for classic BT devices using bluetoothctl."""
+    """
+    Scan for Classic BT and BLE devices using bluetoothctl.
+    bluetoothctl scan on runs both BR/EDR inquiry and LE scan simultaneously,
+    so it catches phones, speakers, earbuds, and other BLE advertisers that
+    hcitool misses entirely.
+    """
     devices = []
     now = _utcnow()
     try:
-        # Start scan, wait, then get devices
+        # Scan with output so we can read NEW_DEVICE lines and RSSI in real time
         proc = subprocess.run(
             ["bluetoothctl", "--timeout", str(timeout), "scan", "on"],
             capture_output=True, text=True, timeout=timeout + 5
         )
-        # Get discovered devices
+
+        # Parse any RSSI values seen during the scan from stdout
+        rssi_map = {}
+        for line in proc.stdout.splitlines():
+            # "[CHG] Device AA:BB:CC:DD:EE:FF RSSI: -67"
+            if "RSSI:" in line and "Device" in line:
+                parts = line.split()
+                try:
+                    mac  = [p for p in parts if ":" in p and len(p) == 17][0].upper()
+                    rssi = int(parts[parts.index("RSSI:") + 1])
+                    rssi_map[mac] = rssi
+                except (IndexError, ValueError):
+                    pass
+
+        # Get the full device list (includes devices found across all scan types)
         list_proc = subprocess.run(
             ["bluetoothctl", "devices"],
             capture_output=True, text=True, timeout=5
@@ -42,14 +62,15 @@ def scan_classic_bluetoothctl(timeout: int = 10) -> list[dict]:
             parts = line.strip().split(" ", 2)
             if len(parts) >= 2 and parts[0] == "Device":
                 mac  = parts[1].upper()
-                name = parts[2] if len(parts) > 2 else "<unknown>"
+                name = parts[2].strip() if len(parts) > 2 else "<unknown>"
+                rssi = rssi_map.get(mac, -100)
                 devices.append({
                     "bssid":      mac,
                     "ssid":       name,
                     "auth_mode":  "[BT]",
                     "first_seen": now,
                     "channel":    0,
-                    "rssi":       -100,
+                    "rssi":       rssi,
                     "type":       "BT",
                     "source":     "bluetoothctl",
                 })
@@ -133,14 +154,22 @@ def _parse_manufacturer(mfr_data: dict) -> str:
     return known.get(cids[0], f"CID:{hex(cids[0])}") if cids else ""
 
 
-def scan_ble(timeout: float = 10.0) -> list[dict]:
-    """Run BLE scan synchronously (runs async loop in thread)."""
+def _run_ble_in_real_thread(timeout: float) -> list[dict]:
+    """Run the async BLE scan in a true OS thread to avoid eventlet conflicts."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(_ble_scan_async(timeout))
+        return loop.run_until_complete(_ble_scan_async(timeout))
+    finally:
         loop.close()
-        return result
+
+
+def scan_ble(timeout: float = 10.0) -> list[dict]:
+    """Run BLE scan in a real OS thread (safe under eventlet monkey-patching)."""
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_run_ble_in_real_thread, timeout)
+            return future.result(timeout=timeout + 5)
     except Exception as e:
         logger.error(f"BLE scan failed: {e}")
         return []
@@ -189,11 +218,22 @@ class BTScanner:
     def _scan(self):
         found = []
 
-        if self.do_ble:
-            found += scan_ble(timeout=min(10.0, self.interval * 0.6))
+        # Run BLE and Classic in parallel so they don't block each other
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = {}
+            if self.do_ble:
+                # Give BLE the full interval minus a small margin.
+                # Longer windows catch more passive advertisers (phones, earbuds).
+                ble_timeout = max(10.0, self.interval - 2)
+                futures["ble"] = pool.submit(scan_ble, ble_timeout)
+            if self.do_classic:
+                futures["classic"] = pool.submit(scan_classic_bluetoothctl, 8)
 
-        if self.do_classic:
-            found += scan_classic_hcitool(timeout=8)
+            for key, f in futures.items():
+                try:
+                    found += f.result(timeout=15)
+                except Exception as e:
+                    logger.warning(f"BT scan ({key}) failed: {e}")
 
         now = _utcnow()
         new_macs = []

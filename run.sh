@@ -5,23 +5,28 @@ cd "$(dirname "$0")"
 
 VENV_DIR="$(pwd)/.venv"
 
+# ── Detect real user (works whether called with sudo or not) ──────────────────
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
 # ── Detect Raspberry Pi ───────────────────────────────────────────────────────
 IS_PI=false
 if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
     IS_PI=true
 fi
 
-# ── Set up virtualenv ─────────────────────────────────────────────────────────
-if [[ ! -f "$VENV_DIR/bin/python3" ]]; then
-    echo "[→] Creating virtual environment..."
-    python3 -m venv "$VENV_DIR"
+# ── Set up virtualenv as the real user (not root) ─────────────────────────────
+if [[ ! -f "$VENV_DIR/bin/pip" ]]; then
+    echo "[→] Creating virtual environment as $REAL_USER..."
+    sudo -u "$REAL_USER" python3 -m venv "$VENV_DIR"
 fi
 
 PYTHON="$VENV_DIR/bin/python3"
 PIP="$VENV_DIR/bin/pip"
 
-# Install/update deps from requirements.txt
-"$PIP" install -q -r requirements.txt
+# Install/update deps as real user
+echo "[→] Installing dependencies..."
+sudo -u "$REAL_USER" "$PIP" install -q -r requirements.txt
 
 # ── Pi-specific setup ─────────────────────────────────────────────────────────
 if $IS_PI; then

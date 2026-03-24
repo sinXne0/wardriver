@@ -51,11 +51,13 @@ flask flask-socketio eventlet pyserial requests bleak qrcode[pil] cryptography P
 git clone https://github.com/sinXne0/wardaemon.git
 cd wardaemon
 chmod +x run.sh
-./run.sh
+sudo bash run.sh
 ```
 
 Open `https://YOUR_IP:5000` in your browser.
 The dashboard prints the URL on startup.
+
+> **Why `sudo`?** WiFi scanning (monitor mode) requires root. `run.sh` automatically creates and populates the Python virtualenv as your real user account — not as root — so there are no permission issues with the `.venv` directory. You never need to create or activate the venv manually.
 
 ---
 
